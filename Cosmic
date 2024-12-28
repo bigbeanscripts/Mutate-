@@ -29,6 +29,10 @@ local selectedPetName = nil
 local selectedMutation = nil
 local stopLoop = false
 local hasReportedCompletion = false
+local autoResetInterval = 10 -- seconds between resets
+
+
+
 
 
 local function getMutation(tbl)
@@ -264,6 +268,21 @@ local AutoMutateToggle = Tabs.Machines:AddToggle("AutoMutateToggle", {
     Default = false,
 })
 
+local function startAutoReset()
+    spawn(function()
+        while true do
+            wait(autoResetInterval)
+            if AutoMutateToggle and AutoMutateToggle.Value then
+                print("[AUTO RESET] Refreshing mutation system...")
+                AutoMutateToggle:Set(false)
+                wait(1)
+                AutoMutateToggle:Set(true)
+            end
+        end
+    end)
+end
+
+-- Modify AutoMutateToggle:OnChanged
 AutoMutateToggle:OnChanged(function(state)
     if state then
         if not selectedPetName or not selectedMutation then
@@ -271,11 +290,15 @@ AutoMutateToggle:OnChanged(function(state)
             AutoMutateToggle:Set(false)
             return
         end
+        startAutoReset() -- Start auto reset when toggle is enabled
         autoCureThenMutateLoop()
     else
         stopLoop = true
     end
 end)
+
+
+
 
 -- Add Random Mutation Button
 Tabs.Machines:AddButton({
