@@ -1,0 +1,319 @@
+-- Mutate
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+
+local Window = Fluent:CreateWindow({
+    Title = "Bean Hub",
+    SubTitle = "By Big Bean",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl,
+})
+
+local Tabs = {
+    Machines = Window:AddTab({ Title = "Machines", Icon = "star" })
+}
+
+-- Services and Variables
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local PetServiceRF = ReplicatedStorage.Packages.Knit.Services.PetService.RF:FindFirstChild("getOwned")
+local PetCombineService = ReplicatedStorage.Packages.Knit.Services.PetCombineService.RF
+local PetCureFn = PetCombineService:FindFirstChild("cure")
+local PetMutateFn = PetCombineService:FindFirstChild("mutate")
+
+local ownedPetData = {}  -- Store full pet data including locked status
+local uniquePetNames = {}
+local selectedPetName = nil
+local selectedMutation = nil
+local stopLoop = false
+local hasReportedCompletion = false
+
+
+local function getMutation(tbl)
+    if not tbl then return nil end
+    for key, value in pairs(tbl) do
+        if type(value) == "string" then
+            if value:match("Rainbow") then return "Rainbow"
+            elseif value:match("Glowing") then return "Glowing"
+            elseif value:match("Ghost") then return "Ghost"
+            elseif value:match("Cosmic") then return "Cosmic" -- Added Cosmic detection
+            end
+        elseif type(value) == "table" then
+            local result = getMutation(value)
+            if result then return result end
+        end
+    end
+    return nil
+end
+
+-- Rest of the code remains exactly the same...
+
+local function fetchOwnedPets()
+    ownedPetData = {}
+    uniquePetNames = {}
+
+    if PetServiceRF and PetServiceRF:IsA("RemoteFunction") then
+        local success, petData = pcall(function()
+            return PetServiceRF:InvokeServer()
+        end)
+
+        if success and petData then
+            for petId, petInfo in pairs(petData) do
+                local displayName = petInfo.DisplayName or "Unknown"
+                
+                if not ownedPetData[displayName] then
+                    ownedPetData[displayName] = {}
+                end
+                
+                table.insert(ownedPetData[displayName], {
+                    Id = petId,
+                    Locked = petInfo.Locked,
+                    Mutation = getMutation(petInfo) or "No Mutation"
+                })
+            end
+
+            for petName, petInstances in pairs(ownedPetData) do
+                for _, petInfo in ipairs(petInstances) do
+                    if not petInfo.Locked then
+                        if not table.find(uniquePetNames, petName) then
+                            table.insert(uniquePetNames, petName)
+                        end
+                        break
+                    end
+                end
+            end
+            return true
+        end
+        return false
+    end
+    return false
+end
+
+-- Create Pet Dropdown
+local PetDropdown = Tabs.Machines:AddDropdown("PetDropdown", {
+    Title = "Select Pet",
+    Description = "Choose a specific unlocked pet name to mutate.",
+    Values = uniquePetNames,
+    Multi = false,
+})
+
+-- Dropdown Refresh Function
+local function refreshDropdown()
+    if fetchOwnedPets() then
+        PetDropdown:SetValues(uniquePetNames)
+        
+        if selectedPetName and not table.find(uniquePetNames, selectedPetName) then
+            selectedPetName = nil
+            PetDropdown:SetValue(nil)
+        end
+    end
+end
+
+-- Periodic Dropdown Refresh
+local function startDropdownRefresh()
+    spawn(function()
+        while true do
+            refreshDropdown()
+            wait(5)
+        end
+    end)
+end
+
+-- Dropdown Selection Handler
+PetDropdown:OnChanged(function(value)
+    selectedPetName = value
+    hasReportedCompletion = false
+    
+    if selectedPetName then
+        local petInstances = ownedPetData[selectedPetName] or {}
+        print("\nUnlocked Pet IDs for", selectedPetName .. ":")
+        for _, petInfo in ipairs(petInstances) do
+            if not petInfo.Locked then
+                print(petInfo.Id)
+            end
+        end
+    end
+end)
+
+
+local MutationDropdown = Tabs.Machines:AddDropdown("MutationDropdown", {
+    Title = "Select Mutation",
+    Description = "Choose a mutation to aim for.",
+    Values = { "Glowing", "Rainbow", "Ghost", "Cosmic" }, -- Added "Cosmic" to the options
+    Multi = false,
+})
+
+-- Rest of the code remains the same, but need to update getMutation function to detect Cosmic
+
+MutationDropdown:OnChanged(function(value)
+    selectedMutation = value
+    hasReportedCompletion = false
+end)
+-- Add Keep Ghost Toggle and Keep Cosmic Toggle
+local KeepGhostToggle = Tabs.Machines:AddToggle("KeepGhostToggle", {
+    Title = "Keep Ghost Pets",
+    Description = "Keep pets if they become Ghost mutation, even if Ghost isn't selected.",
+    Default = false,
+})
+
+local KeepCosmicToggle = Tabs.Machines:AddToggle("KeepCosmicToggle", {
+    Title = "Keep Cosmic Pets",
+    Description = "Keep pets if they become Cosmic mutation, even if Cosmic isn't selected.",
+    Default = false,
+})
+
+local function shouldProcessPet(pet)
+    if KeepGhostToggle.Value and pet.Mutation == "Ghost" then
+        return false
+    end
+    if KeepCosmicToggle.Value and pet.Mutation == "Cosmic" then
+        return false
+    end
+    return pet.Mutation == "No Mutation" or pet.Mutation ~= selectedMutation
+end
+
+local function checkAllPetsMutated()
+    if not selectedPetName or not selectedMutation then return false end
+    
+    local petsToProcess = {}
+    for _, petInfo in pairs(ownedPetData[selectedPetName]) do
+        if not petInfo.Locked then
+            table.insert(petsToProcess, petInfo)
+        end
+    end
+    
+    for _, pet in pairs(petsToProcess) do
+        if KeepGhostToggle.Value and pet.Mutation == "Ghost" then
+            continue
+        end
+        if KeepCosmicToggle.Value and pet.Mutation == "Cosmic" then
+            continue
+        end
+        
+        if pet.Mutation ~= selectedMutation then
+            return false
+        end
+    end
+    
+    return true
+end
+
+local function autoCureThenMutateLoop()
+    stopLoop = false
+    hasReportedCompletion = false
+    while not stopLoop do
+        if selectedPetName and selectedMutation then
+            if checkAllPetsMutated() then
+                if not hasReportedCompletion then
+                    print("Finished mutating all selected pets!")
+                    hasReportedCompletion = true
+                end
+                wait(0.5)
+                continue
+            end
+            
+            local petsToProcess = {}
+            for _, petInfo in pairs(ownedPetData[selectedPetName]) do
+                if not petInfo.Locked and shouldProcessPet(petInfo) then
+                    table.insert(petsToProcess, petInfo)
+                end
+            end
+
+            for _, pet in pairs(petsToProcess) do
+                if stopLoop then break end
+
+                if pet.Mutation ~= selectedMutation then
+                    if pet.Mutation ~= "No Mutation" and 
+                       not (KeepGhostToggle.Value and pet.Mutation == "Ghost") and
+                       not (KeepCosmicToggle.Value and pet.Mutation == "Cosmic") then
+                        if PetCureFn then
+                            local cureArgs = { [1] = pet.Id }
+                            pcall(function()
+                                return PetCureFn:InvokeServer(unpack(cureArgs))
+                            end)
+                        else
+                            warn("Cure function not found!")
+                        end
+                    elseif pet.Mutation == "No Mutation" then
+                        if PetMutateFn then
+                            local mutateArgs = { [1] = pet.Id, [2] = {} }
+                            pcall(function()
+                                return PetMutateFn:InvokeServer(unpack(mutateArgs))
+                            end)
+                        else
+                            warn("Mutate function not found!")
+                        end
+                    end
+                    wait(0.5)
+                    fetchOwnedPets()
+                end
+            end
+        else
+            warn("Please select a pet name and mutation before enabling Auto Mutate.")
+        end
+        wait(0.5)
+    end
+end
+
+-- Add Auto Mutate Toggle
+local AutoMutateToggle = Tabs.Machines:AddToggle("AutoMutateToggle", {
+    Title = "Enable Auto Mutate Loop",
+    Description = "Automatically handles curing and mutation loops.",
+    Default = false,
+})
+
+AutoMutateToggle:OnChanged(function(state)
+    if state then
+        if not selectedPetName or not selectedMutation then
+            warn("Please select a pet name and a mutation before enabling Auto Mutate.")
+            AutoMutateToggle:Set(false)
+            return
+        end
+        autoCureThenMutateLoop()
+    else
+        stopLoop = true
+    end
+end)
+
+-- Add Random Mutation Button
+Tabs.Machines:AddButton({
+    Title = "Randomly Mutate Pets",
+    Description = "Randomly mutate selected pet IDs without curing them.",
+    Callback = function()
+        if not selectedPetName then
+            warn("Please select a pet name before using the mutation button.")
+            return
+        end
+
+        local petsToMutate = {}
+        for _, petInfo in ipairs(ownedPetData[selectedPetName] or {}) do
+            if not petInfo.Locked then
+                table.insert(petsToMutate, petInfo.Id)
+            end
+        end
+
+        if #petsToMutate == 0 then
+            warn("No unlocked pets available for mutation.")
+            return
+        end
+
+        if PetMutateFn then
+            for _, petId in ipairs(petsToMutate) do
+                local mutateArgs = { [1] = petId, [2] = {} }
+                pcall(function()
+                    PetMutateFn:InvokeServer(unpack(mutateArgs))
+                end)
+            end
+            print("Random mutation applied to selected pets:", petsToMutate)
+            fetchOwnedPets() -- Refresh pet data after mutation
+        else
+            warn("Mutate function not found!")
+        end
+    end,
+})
+
+-- Initial fetch and start dropdown refresh
+fetchOwnedPets()
+startDropdownRefresh()
