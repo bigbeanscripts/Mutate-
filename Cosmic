@@ -11,10 +11,10 @@ MinimizeButton.Parent = MinimizeGui
 MinimizeButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 MinimizeButton.BorderColor3 = Color3.fromRGB(50, 50, 50)
 MinimizeButton.AnchorPoint = Vector2.new(0.5, 0.5)
-MinimizeButton.Position = UDim2.new(0.5, 0, 0.5, 0)
-MinimizeButton.Size = UDim2.new(0, 80, 0, 40)
+MinimizeButton.Position = UDim2.new(0.5, 0, 0.4, 0) -- Adjusted to be above the middle
+MinimizeButton.Size = UDim2.new(0, 120, 0, 60) -- Increased size
 MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.Text = "Close"
+MinimizeButton.Text = "Machines Script"
 MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinimizeButton.TextSize = 16.000
 
