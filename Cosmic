@@ -11,10 +11,10 @@ MinimizeButton.Parent = MinimizeGui
 MinimizeButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 MinimizeButton.BorderColor3 = Color3.fromRGB(50, 50, 50)
 MinimizeButton.AnchorPoint = Vector2.new(0.5, 0.5)
-MinimizeButton.Position = UDim2.new(0.5, 0, 0.4, 0) -- Adjusted to be above the middle
-MinimizeButton.Size = UDim2.new(0, 120, 0, 60) -- Increased size
+MinimizeButton.Position = UDim2.new(0.5, 0, 0.5, 0)
+MinimizeButton.Size = UDim2.new(0, 80, 0, 40)
 MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.Text = "Machines Script"
+MinimizeButton.Text = "Close"
 MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinimizeButton.TextSize = 16.000
 
@@ -1289,11 +1289,11 @@ local function runAutoGoldPets()
                         warn("Failed to goldify pets:", result)
                     end
                     
-                    wait(1.5)
+                    wait(0.7)
                     fetchOwnedPets()
                 end
             end
-            wait(2)
+            wait(1.25)
         end
     end)
 end
@@ -1322,11 +1322,11 @@ local function runAutoGoldArms()
                         warn("Failed to evolve arms:", result)
                     end
                     
-                    wait(1.5)
+                    wait(0.7)
                     fetchOwnedArms()
                 end
             end
-            wait(2)
+            wait(1.25)
         end
     end)
 end
