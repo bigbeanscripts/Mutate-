@@ -229,7 +229,7 @@ local function fetchPetData()
     for petId, petInfo in pairs(petData) do
         -- Process only Huge and unlocked pets
         if petInfo.CraftType == "Huge" and petInfo.Locked == false then
-            local displayName = petInfo.DisplayName
+            local displayName = petInfo.Key
             if not ownedPetData[displayName] then
                 ownedPetData[displayName] = {}
             end
@@ -416,7 +416,7 @@ local function fetchOwnedPets()
 
         if success and type(petData) == "table" then
             for petId, petInfo in pairs(petData) do
-                local displayName = petInfo.DisplayName or "Unknown"
+                local displayName = petInfo.Key or "Unknown"
 
                 if not ownedPetData[displayName] then
                     ownedPetData[displayName] = {}
@@ -674,7 +674,7 @@ local function fetchOwnedPets()
         if success and type(petData) == "table" then
             for petId, petInfo in pairs(petData) do
                 if not petInfo.Locked then
-                    local displayName = petInfo.DisplayName or "Unknown"
+                    local displayName = petInfo.Key or "Unknown"
 
                     if not Variables.ownedPetData[displayName] then
                         Variables.ownedPetData[displayName] = {}
@@ -886,7 +886,7 @@ local function fetchOwnedPets()
         
         for petId, petInfo in pairs(petData) do
             if not petInfo.Locked then
-                local displayName = petInfo.DisplayName or "Unknown"
+                local displayName = petInfo.Key or "Unknown"
                 if not ownedPetData[displayName] then
                     ownedPetData[displayName] = {}
                     table.insert(uniquePetNames, displayName)
@@ -1176,7 +1176,7 @@ local function fetchOwnedPets()
     -- Process pet data
     for petId, petInfo in pairs(petData) do
         if type(petInfo) == "table" then
-            local displayName = petInfo.DisplayName or "Unknown"
+            local displayName = petInfo.Key or "Unknown"
             
             if petInfo.Tier == "Normal" and not petInfo.Locked then
                 if not SrvVars.Data.ownedPetData[displayName] then
@@ -1463,7 +1463,7 @@ local function fetchGoldPets()
     
     for petId, petInfo in pairs(petData) do
         if petInfo.Locked == false and petInfo.Tier == "Golden" then
-            local name = petInfo.DisplayName or "Unknown"
+            local name = petInfo.Key or "Unknown"
             if not goldPetData[name] then
                 goldPetData[name] = {}
                 table.insert(pets, name)
