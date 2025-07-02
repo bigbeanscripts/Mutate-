@@ -1474,12 +1474,27 @@ local function refreshDropdowns()
 end
 
 GoldPetsSection:AddButton({
-    Title = "Refresh/Get Pets & Arms",
-    Description = "Manually refresh and get both pet and arms dropdowns",
+    Title = "Refresh/Get Pets",
+    Description = "Manually refresh the gold pets dropdown",
     Callback = function()
         local success, error = pcall(function()
             fetchOwnedPets()
             PetDropdown:SetValues(SrvVars.Data.uniquePetNames)
+        end)
+        
+        if success then
+            print("Gold pets and arms refreshed successfully!")
+        else
+            warn("Failed to refresh gold pets/arms:", error)
+        end
+    end
+})
+
+GoldArmsSection:AddButton({
+    Title = "Refresh/Get Arms",
+    Description = "Manually refresh and arms for the gold arm dropdown",
+    Callback = function()
+        local success, error = pcall(function()
             fetchOwnedArms()
             ArmsDropdown:SetValues(SrvVars.Data.uniqueArmNames)
         end)
@@ -1491,6 +1506,7 @@ GoldPetsSection:AddButton({
         end
     end
 })
+
 
 -- Services and data storage
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
