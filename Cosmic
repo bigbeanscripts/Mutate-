@@ -1637,6 +1637,154 @@ VoidSection:AddButton({
     end
 })
 
+local PristineSection = Tabs.Machines:AddSection("Pristine")
+
+-- Services
+local PristineRF = ReplicatedStorage.Packages.Knit.Services.PetService.RF:FindFirstChild("Pristine")
+
+-- Variables
+local voidPetData = {}  
+local voidPetNames = {} 
+local selectedPristinePet = nil
+local selectedSuccessChance = "33%"
+local isPristineRunning = false
+
+-- Function to fetch void pets
+local function fetchVoidPets()
+    if not PetServiceRF then return {} end
+    
+    local success, petData = pcall(function()
+        return PetServiceRF:InvokeServer()
+    end)
+    
+    if not success or type(petData) ~= "table" then
+        warn("Failed to fetch pet data")
+        return {}
+    end
+    
+    local pets = {}
+    voidPetData = {}
+    
+    for petId, petInfo in pairs(petData) do
+        -- Check if pet is Void tier and unlocked
+        if petInfo.Locked == false and petInfo.Tier == "Void" then
+            local name = petInfo.Key or "Unknown"
+            if not voidPetData[name] then
+                voidPetData[name] = {}
+                table.insert(pets, name)
+            end
+            table.insert(voidPetData[name], petId)
+        end
+    end
+    
+    table.sort(pets)
+    voidPetNames = pets
+    return pets
+end
+
+-- Function to get required count based on success chance
+local function getRequiredCount(chance)
+    if chance == "33%" then
+        return 2
+    elseif chance == "66%" then
+        return 2
+    elseif chance == "100%" then
+        return 3
+    end
+    return 2  -- Default to 66%
+end
+
+-- Create pet dropdown
+local PristinePetDropdown = PristineSection:AddDropdown("PristinePetSelect", {
+    Title = "Select Void Pet",
+    Values = fetchVoidPets(),
+    Multi = false,
+    Default = nil
+})
+
+-- Create success chance dropdown
+local SuccessChanceDropdown = PristineSection:AddDropdown("SuccessChance", {
+    Title = "Select Success Chance",
+    Values = {"33%", "66%", "100%"},
+    Multi = false,
+    Default = "33%"
+})
+
+-- Create auto pristine toggle
+local AutoPristineToggle = PristineSection:AddToggle("AutoPristine", {
+    Title = "Auto Pristine",
+    Default = false
+})
+
+-- Dropdown callbacks
+PristinePetDropdown:OnChanged(function(value)
+    selectedPristinePet = value
+    if voidPetData[value] then
+    end
+end)
+
+SuccessChanceDropdown:OnChanged(function(value)
+    selectedSuccessChance = value
+end)
+
+-- Auto pristine function
+local function runAutoPristine()
+    spawn(function()
+        while isPristineRunning do
+            if selectedPristinePet and voidPetData[selectedPristinePet] then
+                local requiredCount = getRequiredCount(selectedSuccessChance)
+                local availablePets = voidPetData[selectedPristinePet]
+                
+                -- Check if we have enough pets
+                if #availablePets >= requiredCount then
+                    local selectedPets = {}
+                    
+                    -- Select pets for pristine
+                    for i = 1, requiredCount do
+                        table.insert(selectedPets, availablePets[i])
+                    end
+                    
+                    -- Send pristine request
+                    local args = { [1] = selectedPets }
+                    
+                    pcall(function()
+                        PristineRF:InvokeServer(unpack(args))
+                    end)
+                    
+                    -- Wait a moment then refresh pet data
+                    wait(1)
+                    fetchVoidPets()
+                else
+                    wait(5)
+                end
+            else
+                wait(1)
+            end
+        end
+    end)
+end
+
+-- Toggle callback
+AutoPristineToggle:OnChanged(function(value)
+    isPristineRunning = value
+    if value then
+        if not selectedPristinePet then
+            return
+        end
+        runAutoPristine()
+    end
+end)
+
+-- Refresh button
+PristineSection:AddButton({
+    Title = "Refresh Void Pets",
+    Description = "Manually refresh the void pet list for pristine",
+    Callback = function()
+        local pets = fetchVoidPets()
+        PristinePetDropdown:SetValues(pets)
+    end
+})
+
 
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
