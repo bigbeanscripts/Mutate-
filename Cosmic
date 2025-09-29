@@ -258,9 +258,7 @@ Tabs.Machines:AddButton({
     Callback = function()
         if fetchPetData() then
             PetDropdown:SetValues(petNames)
-            print("Goliath pets refreshed successfully!")
         else
-            warn("Failed to refresh Goliath pets")
         end
     end
 })
@@ -491,9 +489,7 @@ Tabs.Machines:AddButton({
     Callback = function()
         if fetchOwnedPets() then
             PetDropdown:SetValues(uniquePetNames)
-            print("Mutation pets refreshed successfully!")
         else
-            warn("Failed to refresh mutation pets")
         end
     end
 })
@@ -653,7 +649,7 @@ local function ultraFastMutateLoop()
 end
 
 local AutoMutateToggle = Tabs.Machines:AddToggle("AutoMutateToggle", {
-    Title = "Ultra Fast Mutate",
+    Title = "Auto Mutate",
     Description = "Automatically handles curing and mutation loops with optimized speed.",
     Default = false,
 })
@@ -668,41 +664,69 @@ AutoMutateToggle:OnChanged(function(value)
     end
 end)
 
+-- State variable to control the auto-mutation loop
+local isAutoMutating = false
+
 Tabs.Machines:AddButton({
-    Title = "Randomly Mutate Pets",
-    Description = "Randomly mutate selected pet IDs without curing them.",
+    Title = "Auto Mutate (No Cure)",
+    Description = "Continuously mutates selected pets that have no cure until all are mutated. Click again to stop.",
     Callback = function()
+        -- Ensure a pet name is selected from the dropdown
         if not mutationData.selectedPet then
-            warn("Please select a pet name before using the mutation button.")
+            warn("Please select a pet name before starting auto-mutation.")
             return
         end
 
-        local petsToMutate = {}
-        for _, petInfo in ipairs(ownedPetData[mutationData.selectedPet] or {}) do
-            if not petInfo.Locked then
-                table.insert(petsToMutate, petInfo.Id)
-            end
-        end
+        -- Toggle the loop's running state
+        isAutoMutating = not isAutoMutating
 
-        if #petsToMutate == 0 then
-            warn("No unlocked pets available for mutation.")
+        if not isAutoMutating then
             return
         end
+        
+        spawn(function()
+            -- This loop will run as long as isAutoMutating is true
+            while isAutoMutating do
+                -- Get the latest pet data from the server
+                fetchOwnedPets() 
+                
+                local petToMutateId = nil
+                local petsOfSelectedType = ownedPetData[mutationData.selectedPet] or {}
 
-        if PetMutateFn then
-            for _, petId in ipairs(petsToMutate) do
-                local mutateArgs = { [1] = petId, [2] = {} }
-                pcall(function()
-                    PetMutateFn:InvokeServer(unpack(mutateArgs))
-                end)
+                -- Find the first available pet that is unlocked and has no mutation
+                for _, petInfo in ipairs(petsOfSelectedType) do
+                    if not petInfo.Locked and petInfo.Mutation == "No Mutation" then
+                        petToMutateId = petInfo.Id
+                        break -- We only need to find one pet per second
+                    end
+                end
+
+                -- Check if a valid pet was found
+                if petToMutateId then
+                    -- A pet needs mutating, so call the server function
+                    if PetMutateFn then
+                        pcall(function()
+                            -- The arguments are the pet ID and an empty table for sacrifices
+                            PetMutateFn:InvokeServer(petToMutateId, {})
+                        end)
+                    else
+                        warn("Mutate function not found! Stopping.")
+                        isAutoMutating = false -- Stop the loop if the function is missing
+                        break
+                    end
+                else
+                    -- If no pet was found, it means all are mutated or locked. The job is done.
+                    warn("All selected pets have a mutation. Auto-mutation complete.")
+                    isAutoMutating = false -- Stop the loop
+                    break
+                end
+
+                -- Wait for 1 second before the next cycle
+                wait(1)
             end
-            fetchOwnedPets()
-        else
-            warn("Mutate function not found!")
-        end
+        end)
     end,
 })
-
 
 
 local SlimePetsSection = Tabs.Machines:AddSection("Slime")
@@ -882,7 +906,6 @@ SlimeDropdown:OnChanged(function(value)
         end
     end
     if #Variables.selectedSlimeColors > 0 then
-        print("Selected Slimes:", table.concat(Variables.selectedSlimeColors, ", "))
     end
 end)
 
@@ -900,9 +923,7 @@ Tabs.Machines:AddButton({
     Callback = function()
         if fetchOwnedPets() then
             PetDropdown:SetValues(Variables.uniquePetNames)
-            print("Slime pets refreshed successfully!")
         else
-            warn("Failed to refresh slime pets")
         end
     end
 })
@@ -992,11 +1013,9 @@ PetDropdown:OnChanged(function(value)
     selectedPetName = value
     completedPets = {}
     if selectedPetName then
-        print("\n[SELECTED] Pet:", selectedPetName)
         local petInstances = ownedPetData[selectedPetName] or {}
         for _, petInfo in ipairs(petInstances) do
             local enchant = petInfo.Enchantment and petInfo.Enchantment.Display or "No Enchant"
-            print(string.format("[PET] ID: %s | Enchant: %s", petInfo.Id, enchant))
         end
     end
 end)
@@ -1010,16 +1029,13 @@ EnchantDropdown:OnChanged(function(value)
     end
     
     if #selectedEnchants > 0 then
-        print("\n[TARGET] Enchants:", table.concat(selectedEnchants, ", "))
     else
-        print("No enchants selected")
     end
 end)
 
 
 AutoEnchantToggle:OnChanged(function(value)
     if value then
-        print("\n[AUTO ENCHANT] Started")
         spawn(function()
             while AutoEnchantToggle.Value do
                 if selectedPetName and #selectedEnchants > 0 then
@@ -1033,14 +1049,11 @@ AutoEnchantToggle:OnChanged(function(value)
                                 
                                 local currentEnchant = petInfo.Enchantment and petInfo.Enchantment.Display
                                 if table.find(selectedEnchants, currentEnchant) then
-                                    print(string.format("[SKIP] Pet ID: %s already has desired enchant: %s", petInfo.Id, currentEnchant))
                                     completedPets[petInfo.Id] = true
                                     continue
                                 end
                                 
                                 if not table.find(slotPets, petInfo.Id) then
-                                    print(string.format("\n[SLOT %d] Adding pet ID: %s", slot, petInfo.Id))
-                                    print(string.format("[CURRENT] Enchant: %s", currentEnchant or "No Enchant"))
                                     RiftMachineService.AddSlot:InvokeServer(tostring(slot), petInfo.Id)
                                     slotPets[slot] = petInfo.Id
                                     break
@@ -1050,13 +1063,11 @@ AutoEnchantToggle:OnChanged(function(value)
                     end
                     
                     if slotPets[1] or slotPets[2] or slotPets[3] then
-                        print("\n[WAITING] 910 seconds...")
                         wait(910)
                         
                         for slot = 1, 3 do
                             if slotPets[slot] then
                                 local petId = slotPets[slot]
-                                print(string.format("\n[CLAIMING] Slot %d | Pet ID: %s", slot, petId))
                                 RiftMachineService.Claim:InvokeServer(tostring(slot))
                                 
                                 -- Fetch updated pet data
@@ -1067,13 +1078,10 @@ AutoEnchantToggle:OnChanged(function(value)
                                 
                                 if success and petData[petId] and petData[petId].Enchantment then
                                     local newEnchant = petData[petId].Enchantment.Display
-                                    print(string.format("[RESULT] Pet ID: %s | New Enchant: %s", petId, newEnchant or "No Enchant"))
                                     
                                     if table.find(selectedEnchants, newEnchant) then
-                                        print(string.format("[SUCCESS] Pet ID: %s got desired enchant!", petId))
                                         completedPets[petId] = true
                                     else
-                                        print(string.format("[CONTINUE] Pet ID: %s will continue enchanting", petId))
                                     end
                                 end
                                 
@@ -1092,7 +1100,6 @@ AutoEnchantToggle:OnChanged(function(value)
                         end
                         
                         if allDone then
-                            print("\n[COMPLETE] All pets have reached desired enchants!")
                             AutoEnchantToggle:Set(false)
                             break
                         end
@@ -1102,7 +1109,6 @@ AutoEnchantToggle:OnChanged(function(value)
             end
         end)
     else
-        print("\n[AUTO ENCHANT] Stopped")
         slotPets = {[1] = nil, [2] = nil, [3] = nil}
         completedPets = {}
     end
@@ -1114,9 +1120,7 @@ Tabs.Machines:AddButton({
     Callback = function()
         if fetchOwnedPets() then
             PetDropdown:SetValues(uniquePetNames)
-            print("Enchant pets refreshed successfully!")
         else
-            warn("Failed to refresh enchant pets")
         end
     end
 })
@@ -1181,7 +1185,6 @@ local function getRandomIds(itemTable, count, lastUsedIds, itemName)
     
     -- If we still don't have enough IDs, return empty table
     if #availableIds < count then
-        print("Not enough " .. itemName .. " remaining")
         return {}
     end
     
@@ -1483,9 +1486,7 @@ GoldPetsSection:AddButton({
         end)
         
         if success then
-            print("Gold pets and arms refreshed successfully!")
         else
-            warn("Failed to refresh gold pets/arms:", error)
         end
     end
 })
@@ -1500,9 +1501,7 @@ GoldArmsSection:AddButton({
         end)
         
         if success then
-            print("Gold pets and arms refreshed successfully!")
         else
-            warn("Failed to refresh gold pets/arms:", error)
         end
     end
 })
@@ -1633,7 +1632,6 @@ VoidSection:AddButton({
     Callback = function()
         local newPets = fetchGoldPets()
         VoidPetDropdown:SetValues(newPets)
-        print("Void pets refreshed successfully!")
     end
 })
 
