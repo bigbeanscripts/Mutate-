@@ -27,188 +27,69 @@ local function BuildUI()
     Hub.UI.Window = Library:CreateWindow({Title="Bean Hub", SubTitle="By Big Bean", TabWidth=160, Size=UDim2.fromOffset(580, 460), Acrylic=true, Theme="Dark", MinimizeKey=Enum.KeyCode.LeftControl})
     local MachinesTab = Hub.UI.Window:AddTab({Title="Machines", Icon="star"})
 
-
-    local GoliathPetsSection = Tabs.Machines:AddSection("Goliath")
-
-    -- Services
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local TweenService = game:GetService("TweenService")
-
-    -- Configuration
-    local CONFIG = {
-        SLOT_WAIT_TIME = 910,  -- Wait time per slot
-        DROPDOWN_REFRESH_INTERVAL = 5,  -- Dropdown refresh interval
-        PET_REFRESH_INTERVAL = 30,  -- Interval to refresh huge/unlocked pets
-    }
-    -- Services and Remote Function
-    local PetServiceRF = ReplicatedStorage.Packages.Knit.Services.PetService.RF:FindFirstChild("getOwned")
-    local PetGoliathService = ReplicatedStorage.Packages.Knit.Services.PetGoliathService.RE
-
-    -- Pet Data Management
-    local ownedPetData = {} -- Maps pet names to their IDs
-    local petNames = {}
-    local selectedPetName = nil  -- Track selected pet globally
-    local isAutoGoliathRunning = false  -- Flag to control the automation loop
-
-    -- Fetch Pet Data
-    local function fetchPetData()
-        -- Reset existing data
-        ownedPetData = {}
-        petNames = {}
-
-        if not PetServiceRF or not PetServiceRF:IsA("RemoteFunction") then
-            warn("RemoteFunction 'getOwned' is invalid or unavailable.")
-            return false
-        end
-
-        local success, petData = pcall(function()
-            return PetServiceRF:InvokeServer()
-        end)
-
-        if not success or not petData then
-            warn("Failed to fetch pets or no pets found.")
-            return false
-        end
-
-        for petId, petInfo in pairs(petData) do
-            -- Process only Huge and unlocked pets
-            if petInfo.CraftType == "Huge" and petInfo.Locked == false then
-                local displayName = petInfo.Key
-                if not ownedPetData[displayName] then
-                    ownedPetData[displayName] = {}
-                end
-                table.insert(ownedPetData[displayName], petId)
-
-                if not table.find(petNames, displayName) then
-                    table.insert(petNames, displayName)
-                end
-            end
-        end
-
-        return true
-    end
-
-    -- Pet Dropdown
-    local PetDropdown = Tabs.Machines:AddDropdown("SelectPet", {
-        Title = "Select Your Pet",
-        Description = "Choose the name of the pets you want to goliath (The pet will only appear if its a huge and is unlocked).",
-        Values = petNames,
-        Multi = false,
-    })
-
-    Tabs.Machines:AddButton({
-        Title = "Refresh Goliath Pets",
-        Description = "Manually refresh the pet dropdown list",
-        Callback = function()
-            if fetchPetData() then
-                PetDropdown:SetValues(petNames)
-            else
-            end
-        end
-    })
-
-    -- Periodically Update Huge/Unlocked Pet IDs
-    local function periodicPetDataRefresh()
-        spawn(function()
-            while true do
-                fetchPetData()
-                wait(CONFIG.PET_REFRESH_INTERVAL)
-            end
-        end)
-    end
-
-    -- Dropdown Selection Handler
-    PetDropdown:OnChanged(function(selectedPet)
-        selectedPetName = selectedPet  -- Store selected pet globally
-        local ids = ownedPetData[selectedPet] or {}
-        
-        if #ids > 0 then
-            for _, id in ipairs(ids) do
-            end
-        else
-        end
-    end)
-
-    -- Add paragraph for user instructions
-    Tabs.Machines:AddParagraph({
-        Title = "Pet Info",
-        Content = [[When selecting a pet, check the console to verify if the pet IDs are displayed correctly.  
-    If the IDs aren't showing, select a different pet and then switch back to refresh the IDs.
-
-    Note: This Goliath automation only works for unlocked pets.  
-    If you want specific huge pets to stay huge, make sure to lock them.]]
-    })
-
-    -- Auto Goliath Toggle
-    local AutoGoliathToggle = Tabs.Machines:AddToggle("Auto Goliath", {
-        Title = "Enable Auto Goliath",
-        Description = "Star Auto Goliathing your pets.",
-        State = false
-    })
-
-    -- Auto Goliath Function
-    local function AutoGoliath(selectedIDs)
-        if not selectedIDs or #selectedIDs == 0 then
-            warn("No pets selected for Goliath.")
-            return
-        end
-
-        local currentIndex = 1
-
-        while isAutoGoliathRunning do
-            local slotsToFill = math.min(3, #selectedIDs)
-
-            for i = 1, slotsToFill do
-                local petId = selectedIDs[((currentIndex + i - 2) % #selectedIDs) + 1]
-                
-                local purchaseArgs = {
-                    [1] = petId,
-                    [2] = "Slot" .. i
-                }
-
-                PetGoliathService.onPurchase:FireServer(unpack(purchaseArgs))
-            end
-
-            task.wait(CONFIG.SLOT_WAIT_TIME)
-
-            for i = 1, slotsToFill do
-                local claimArgs = {
-                    [1] = "PlaceholderString",
-                    [2] = "Slot" .. i,
-                }
-
-                PetGoliathService.onClaim:FireServer(unpack(claimArgs))
-            end
-
-            currentIndex = ((currentIndex + slotsToFill - 1) % #selectedIDs) + 1
-        end
-    end
-
-    -- Auto Goliath Toggle Handler
+local GoliathSection = MachinesTab:AddSection("Goliath")
+    Hub.UI.GoliathPetDropdown = GoliathSection:AddDropdown("GoliathPetDropdown", {Title="Select Pet", Values={}, Multi=false, Searchable=true})
+    GoliathSection:AddButton({Title="Refresh Goliath Pets", Callback=function() local names=fetchGoliathPets(); Hub.UI.GoliathPetDropdown:SetValues(names) end})
+    Hub.UI.GoliathPetDropdown:OnChanged(function(value) Hub.Data.selectedGoliathPetName = value end)
+    local AutoGoliathToggle = GoliathSection:AddToggle("AutoGoliath", {Title="Enable Auto Goliath", Description="Fills all available slots, waits 910 seconds, then claims.", Default=false})
+    
     AutoGoliathToggle:OnChanged(function(enabled)
-        if enabled then
-            
-            if not selectedPetName then
-                warn("Please select a pet to use for Goliath.")
-                AutoGoliathToggle:Set(false)
-                return
-            end
+        Hub.State.autoGoliath = enabled
+        if not enabled then return end
 
-            local selectedIDs = ownedPetData[selectedPetName]
-            if not selectedIDs or #selectedIDs == 0 then
-                warn("No pet IDs found.")
-                AutoGoliathToggle:Set(false)
-                return
-            end
+        task.spawn(function()
+            while Hub.State.autoGoliath do
+                -- 1. Validate that a pet is selected
+                if not Hub.Data.selectedGoliathPetName then
+                    Hub.State.autoGoliath = false
+                    AutoGoliathToggle:Set(false)
+                    break
+                end
 
-            isAutoGoliathRunning = true
-            spawn(function()
-                AutoGoliath(selectedIDs)
-            end)
-        else
-            isAutoGoliathRunning = false
-        end
+                fetchGoliathPets()
+                local petsToUse = Hub.Data.goliathPets[Hub.Data.selectedGoliathPetName] or {}
+
+                -- 3. Check if we have any pets left to use
+                if #petsToUse == 0 then
+                    Hub.State.autoGoliath = false
+                    AutoGoliathToggle:Set(false)
+                    break
+                end
+
+                -- 4. Place pets into the machine
+                local slotsToFill = math.min(3, #petsToUse)
+                for i = 1, slotsToFill do
+                    if not Hub.State.autoGoliath then break end
+                    local petId = petsToUse[i]
+                    local slotName = "Slot"..i
+                    Hub.Services.Pet.Goliath.onPurchase:FireServer(petId, slotName)
+                    task.wait(0.2) -- Small delay between placing each pet
+                end
+                
+                -- If the toggle was turned off while placing pets, exit now
+                if not Hub.State.autoGoliath then break end
+
+                -- 5. Wait for the 910 second machine timer
+                task.wait(910)
+
+                -- 6. Check again if the toggle was turned off during the wait
+                if not Hub.State.autoGoliath then
+                    break
+                end
+
+                -- 7. Claim all pets from the machine
+                for i = 1, slotsToFill do
+                    local slotName = "Slot"..i
+                    -- The first argument for claim doesn't matter, but we must provide something
+                    Hub.Services.Pet.Goliath.onClaim:FireServer("Claim", slotName)
+                    task.wait(0.2) -- Small delay between claiming each pet
+                end
+
+                task.wait(5) -- Brief cooldown before starting the next cycle
+            end
+        end)
     end)
+
     local MutateSection = MachinesTab:AddSection("Mutate")
 
 
